@@ -1,11 +1,20 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-// Create uploads folder if it doesn't exist
-const uploadDir = 'uploads';
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir);
+// Use /tmp for serverless environments (like Vercel)
+const uploadDir = process.env.NODE_ENV === 'production' 
+    ? path.join(os.tmpdir(), 'uploads') 
+    : path.join(__dirname, '../uploads');
+
+// Create uploads folder safely
+try {
+    if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+    }
+} catch (err) {
+    console.log('Upload directory creation skipped or failed:', err.message);
 }
 
 // User memory storage for images
@@ -14,7 +23,7 @@ const imageStorage = multer.memoryStorage();
 // Use disk storage for videos to handle large files and Cloudinary chunked upload
 const videoStorage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/');
+        cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
         cb(null, `${Date.now()}-${file.originalname}`);
