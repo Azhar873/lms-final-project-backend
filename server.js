@@ -5,25 +5,24 @@ const dotenv = require('dotenv');
 const path = require('path');
 const connectDB = require('./config/db');
 
-// Load env vars
 dotenv.config();
-
-// Connect to database
-connectDB();
 
 const app = express();
 
 // Middleware
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: process.env.NODE_ENV === "production"
+        ? 'https://your-frontend.vercel.app'
+        : 'http://localhost:5173',
     credentials: true,
 }));
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
-
-// Serve static files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static files (optional, for dev only)
+if (process.env.NODE_ENV !== "production") {
+    app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+}
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -49,12 +48,22 @@ app.use((err, req, res, next) => {
     });
 });
 
-const PORT = process.env.PORT || 5000;
+// Lazy DB connection for serverless
+let isConnected = false;
+const serverlessHandler = async (req, res) => {
+    if (!isConnected) {
+        await connectDB();
+        isConnected = true;
+    }
+    app(req, res);
+};
 
+module.exports = serverlessHandler;
+
+// Only listen locally
 if (process.env.NODE_ENV !== "production") {
+    const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
         console.log(`🚀 LMS API Server running on http://localhost:${PORT}`);
     });
 }
-
-module.exports = app;
