@@ -26,6 +26,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/courses', require('./routes/courseRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/enroll', require('./routes/enrollmentRoutes'));
+app.use('/api/reviews', require('./routes/reviewRoutes'));
 
 // Health check
 app.get('/', (req, res) => res.json({ message: '✅ LMS API is running', status: 'OK' }));

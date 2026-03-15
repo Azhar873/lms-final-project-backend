@@ -8,6 +8,8 @@ const {
     updateProgress,
     getAllEnrollments,
     getInstructorEnrollments,
+    getEnrollmentById,
+    completeLesson,
 } = require('../controllers/enrollmentController');
 const { protect } = require('../middleware/auth');
 const { authorize } = require('../middleware/role');
@@ -19,5 +21,7 @@ router.get('/instructor', protect, authorize('instructor', 'admin'), getInstruct
 router.put('/:id/status', protect, authorize('instructor', 'admin'), handleRequest);
 router.put('/:enrollmentId/progress', protect, authorize('student'), updateProgress);
 router.get('/all', protect, authorize('admin'), getAllEnrollments);
+router.get('/:id', protect, getEnrollmentById);
+router.post('/:id/lesson-complete', protect, authorize('student'), completeLesson);
 
 module.exports = router;

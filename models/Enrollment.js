@@ -28,9 +28,13 @@ const enrollmentSchema = new mongoose.Schema(
                 type: Number,
             },
         ],
+        completedAt: {
+            type: Date,
+        },
     },
     { timestamps: true }
 );
+
 
 // Prevent duplicate enrollments
 enrollmentSchema.index({ student: 1, course: 1 }, { unique: true });

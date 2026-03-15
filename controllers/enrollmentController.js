@@ -123,7 +123,14 @@ const updateProgress = async (req, res) => {
             return res.status(403).json({ message: 'Not authorized' });
         }
 
-        enrollment.progress = req.body.progress || enrollment.progress;
+        if (req.body.progress !== undefined) {
+            enrollment.progress = req.body.progress;
+        }
+
+        if (enrollment.progress === 100 && !enrollment.completedAt) {
+            enrollment.completedAt = new Date();
+        }
+
         await enrollment.save();
         res.json(enrollment);
     } catch (error) {
@@ -167,4 +174,103 @@ const getInstructorEnrollments = async (req, res) => {
     }
 };
 
-module.exports = { enrollInCourse, getMyCourses, getPendingRequests, handleRequest, updateProgress, getAllEnrollments, getInstructorEnrollments };
+// @desc    Get enrollment by ID
+// @route   GET /api/enroll/:id
+// @access  Private
+const getEnrollmentById = async (req, res) => {
+    try {
+        const enrollment = await Enrollment.findById(req.params.id)
+            .populate('student', 'name email')
+            .populate({
+                path: 'course',
+                populate: { path: 'instructor', select: 'name email title' } // instructor details
+            });
+
+        if (!enrollment) {
+            return res.status(404).json({ message: 'Enrollment not found' });
+        }
+
+        // Allow access to student, Course Instructor, or Admin
+        const isStudent = enrollment.student._id.toString() === req.user._id.toString();
+        const isInstructor = enrollment.course.instructor._id.toString() === req.user._id.toString();
+        const isAdmin = req.user.role === 'admin';
+
+        if (!isStudent && !isInstructor && !isAdmin) {
+            return res.status(403).json({ message: 'Not authorized to view this enrollment' });
+        }
+
+        res.json(enrollment);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Mark a lesson as complete and update progress
+// @route   POST /api/enroll/:id/lesson-complete
+// @access  Private (Student)
+const completeLesson = async (req, res) => {
+    try {
+        const { lessonIndex } = req.body;
+        const enrollment = await Enrollment.findById(req.params.id).populate('student').populate({
+            path: 'course',
+            populate: { path: 'instructor' }
+        });
+
+        if (!enrollment) return res.status(404).json({ message: 'Enrollment not found' });
+
+        if (enrollment.student._id.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        // Add lesson index to completedLessons if not already present
+        if (!enrollment.completedLessons.includes(lessonIndex)) {
+            enrollment.completedLessons.push(lessonIndex);
+        }
+
+        // Calculate progress
+        const totalLessons = enrollment.course.lessons.length;
+        const completedCount = enrollment.completedLessons.length;
+        const progressPercentage = Math.round((completedCount / totalLessons) * 100);
+
+        const wasAlreadyCompleted = enrollment.progress === 100;
+        enrollment.progress = progressPercentage;
+
+        if (enrollment.progress === 100 && !wasAlreadyCompleted && !enrollment.completedAt) {
+            enrollment.completedAt = new Date();
+
+            // Send email to instructor
+            try {
+                const instructorEmail = enrollment.course.instructor.email;
+                const message = `
+                    Hello ${enrollment.course.instructor.name},
+
+                    Great news! A student has just completed your course.
+
+                    Student: ${enrollment.student.name} (${enrollment.student.email})
+                    Course: ${enrollment.course.title}
+                    Completed On: ${enrollment.completedAt.toLocaleDateString()}
+
+                    They have been issued their completion certificate. You can view all completed student certificates in your LearnHub Instructor Dashboard under the "Certificates" tab.
+
+                    Regards,
+                    LearnHub Team
+                `;
+
+                await sendEmail({
+                    email: instructorEmail,
+                    subject: '🎉 A student completed your course!',
+                    message,
+                });
+            } catch (err) {
+                console.error('Failed to send course completion email to instructor:', err);
+            }
+        }
+
+        await enrollment.save();
+        res.json(enrollment);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { enrollInCourse, getMyCourses, getPendingRequests, handleRequest, updateProgress, getAllEnrollments, getInstructorEnrollments, getEnrollmentById, completeLesson };
