@@ -1,7 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const sendEmail = require('../utils/sendEmail');
 
 // Generate JWT
 const generateToken = (id) => {
@@ -97,25 +96,8 @@ const forgotPassword = async (req, res) => {
 
         await user.save({ validateBeforeSave: false });
 
-        const message = `Your password reset code is: ${otp}. It will expire in 10 minutes.`;
-
-        try {
-            await sendEmail({
-                email: user.email,
-                subject: 'Password reset code',
-                message,
-            });
-
-            res.status(200).json({ success: true, data: 'OTP sent to email' });
-        } catch (err) {
-            console.log(err);
-            user.resetPasswordToken = undefined;
-            user.resetPasswordExpire = undefined;
-
-            await user.save({ validateBeforeSave: false });
-
-            return res.status(500).json({ message: 'Email could not be sent' });
-        }
+        // Return OTP directly in response (no email/SMTP needed)
+        res.status(200).json({ success: true, data: 'OTP generated', otp });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

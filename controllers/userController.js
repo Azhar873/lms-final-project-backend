@@ -58,6 +58,30 @@ const getAnalytics = async (req, res) => {
         const totalCourses = await Course.countDocuments();
         const totalEnrollments = await Enrollment.countDocuments();
 
+        // User growth last 6 months
+        const now = new Date();
+        const userGrowth = [];
+        for (let i = 5; i >= 0; i--) {
+            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+            const count = await User.countDocuments({
+                createdAt: { $gte: date, $lt: nextDate }
+            });
+            userGrowth.push({
+                month: date.toLocaleString('default', { month: 'short' }),
+                users: count
+            });
+        }
+
+        // Course distribution by category
+        const categories = await Course.aggregate([
+            { $group: { _id: '$category', count: { $sum: 1 } } }
+        ]);
+        const courseDistribution = categories.map(c => ({
+            name: c._id || 'Other',
+            value: c.count
+        }));
+
         const recentUsers = await User.find()
             .select('-password')
             .sort({ createdAt: -1 })
@@ -69,6 +93,8 @@ const getAnalytics = async (req, res) => {
             totalInstructors,
             totalCourses,
             totalEnrollments,
+            userGrowth,
+            courseDistribution,
             recentUsers,
         });
     } catch (error) {

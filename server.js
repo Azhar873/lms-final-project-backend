@@ -13,8 +13,8 @@ const app = express();
 app.use(cors({
     origin: [
         'http://localhost:5173',
-        process.env.CLIENT_URL,
-        'https://your-frontend.vercel.app' // Fallback
+        'https://lms-final-project-frontend.vercel.app',
+        process.env.CLIENT_URL
     ].filter(Boolean),
     credentials: true
 }));

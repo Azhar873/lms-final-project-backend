@@ -273,4 +273,71 @@ const completeLesson = async (req, res) => {
     }
 };
 
-module.exports = { enrollInCourse, getMyCourses, getPendingRequests, handleRequest, updateProgress, getAllEnrollments, getInstructorEnrollments, getEnrollmentById, completeLesson };
+// @desc    Get instructor analytics
+// @route   GET /api/enroll/instructor-analytics
+// @access  Private (Instructor)
+const getInstructorAnalytics = async (req, res) => {
+    try {
+        // Get all courses by this instructor
+        const courses = await Course.find({ instructor: req.user._id }).select('_id title');
+        const courseIds = courses.map(c => c._id);
+        const totalCourses = courses.length;
+
+        // All enrollments for instructor's courses
+        const allEnrollments = await Enrollment.find({ course: { $in: courseIds } })
+            .populate('student', 'name email')
+            .populate('course', 'title')
+            .sort({ createdAt: -1 });
+
+        const totalStudents = new Set(
+            allEnrollments.filter(e => e.status === 'approved').map(e => e.student?._id?.toString())
+        ).size;
+
+        const pendingRequests = allEnrollments.filter(e => e.status === 'pending').length;
+        const approvedCount = allEnrollments.filter(e => e.status === 'approved').length;
+        const rejectedCount = allEnrollments.filter(e => e.status === 'rejected').length;
+        const completedEnrollments = allEnrollments.filter(e => e.progress === 100).length;
+
+        // Monthly enrollments for last 6 months
+        const now = new Date();
+        const monthlyEnrollments = [];
+        for (let i = 5; i >= 0; i--) {
+            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+            const count = allEnrollments.filter(e => {
+                const d = new Date(e.createdAt);
+                return d >= date && d < nextDate;
+            }).length;
+            monthlyEnrollments.push({
+                month: date.toLocaleString('default', { month: 'short', year: '2-digit' }),
+                enrollments: count,
+            });
+        }
+
+        // Recent 6 enrollments
+        const recentActivity = allEnrollments.slice(0, 6).map(e => ({
+            _id: e._id,
+            studentName: e.student?.name || 'Unknown',
+            studentEmail: e.student?.email || '',
+            courseTitle: e.course?.title || 'Unknown',
+            status: e.status,
+            date: e.createdAt,
+        }));
+
+        res.json({
+            totalCourses,
+            totalStudents,
+            pendingRequests,
+            completedEnrollments,
+            approvedCount,
+            rejectedCount,
+            monthlyEnrollments,
+            recentActivity,
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { enrollInCourse, getMyCourses, getPendingRequests, handleRequest, updateProgress, getAllEnrollments, getInstructorEnrollments, getEnrollmentById, completeLesson, getInstructorAnalytics };
+
